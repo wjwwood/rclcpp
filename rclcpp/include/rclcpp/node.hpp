@@ -196,19 +196,21 @@ public:
   using CallbackGroupWeakPtrList = std::list<CallbackGroupWeakPtr>;
 
   /* Create and return a Client. */
-  template<typename ServiceT>
+  template<typename ServiceT, typename Alloc = std::allocator<void>>
   typename rclcpp::client::Client<ServiceT>::SharedPtr
   create_client(
     const std::string & service_name,
-    rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr);
+    rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr,
+    std::shared_ptr<Alloc> allocator = nullptr);
 
   /* Create and return a Service. */
-  template<typename ServiceT, typename CallbackT>
+  template<typename ServiceT, typename FunctorT, typename Alloc = std::allocator<void>>
   typename rclcpp::service::Service<ServiceT>::SharedPtr
   create_service(
     const std::string & service_name,
     CallbackT && callback,
-    rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr);
+    rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr,
+    std::shared_ptr<Alloc> allocator = nullptr);
 
   RCLCPP_PUBLIC
   std::vector<rcl_interfaces::msg::SetParametersResult>

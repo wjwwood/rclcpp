@@ -77,15 +77,12 @@ class Client : public ClientBase
 public:
   using RequestAllocTraits = allocator::AllocRebind<typename ServiceT::Request, Alloc>;
   using RequestAlloc = typename RequestAllocTraits::allocator_type;
-  using RequestDeleter = allocator::Deleter<Alloc, typename ServiceT::Request>;
 
   using ResponseAllocTraits = allocator::AllocRebind<typename ServiceT::Response, Alloc>;
   using ResponseAlloc = typename ResponseAllocTraits::allocator_type;
-  using ResponseDeleter = allocator::Deleter<Alloc, typename ServiceT::Response>;
 
   using HeaderAllocTraits = allocator::AllocRebind<rmw_request_id_t, Alloc>;
   using HeaderAlloc = typename HeaderAllocTraits::allocator_type;
-  using HeaderDeleter = allocator::Deleter<Alloc, rmw_request_id_t>;
 
   using Promise = std::promise<typename ServiceT::Response::SharedPtr>;
   using SharedPromise = std::shared_ptr<Promise>;
@@ -93,7 +90,6 @@ public:
 
   using PromiseAllocTraits = allocator::AllocRebind<Promise, Alloc>;
   using PromiseAlloc = typename PromiseAllocTraits::allocator_type;
-  using PromiseDeleter = allocator::Deleter<Alloc, Promise>;
 
 
   using CallbackType = std::function<void(SharedFuture)>;
@@ -102,9 +98,18 @@ public:
   Client(
     std::shared_ptr<rmw_node_t> node_handle,
     rmw_client_t * client_handle,
-    const std::string & service_name)
+    const std::string & service_name,
+    std::shared_ptr<Alloc> allocator = nullptr)
   : ClientBase(node_handle, client_handle, service_name)
-  {}
+  {
+    if (!allocator) {
+      allocator = std::make_shared<Alloc>();
+    }
+    request_allocator_ = std::make_shared<RequestAlloc>(*allocator.get());
+    response_allocator_ = std::make_shared<ResponseAlloc>(*allocator.get());
+    header_allocator_ = std::make_shared<HeaderAlloc>(*allocator.get());
+    promise_allocator_ = std::make_shared<PromiseAlloc>(*allocator.get());
+  }
 
   std::shared_ptr<void> create_response()
   {
@@ -172,7 +177,6 @@ private:
   std::shared_ptr<RequestAlloc> request_allocator_;
   std::shared_ptr<ResponseAlloc> response_allocator_;
   std::shared_ptr<HeaderAlloc> header_allocator_;
-
   std::shared_ptr<PromiseAlloc> promise_allocator_;
 };
 

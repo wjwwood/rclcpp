@@ -270,11 +270,12 @@ Node::create_subscription(
     allocator);
 }
 
-template<typename ServiceT>
+template<typename ServiceT, typename Alloc>
 typename client::Client<ServiceT>::SharedPtr
 Node::create_client(
   const std::string & service_name,
-  rclcpp::callback_group::CallbackGroup::SharedPtr group)
+  rclcpp::callback_group::CallbackGroup::SharedPtr group,
+  std::shared_ptr<Alloc> allocator)
 {
   using rosidl_generator_cpp::get_service_type_support_handle;
   auto service_type_support_handle =
@@ -296,7 +297,8 @@ Node::create_client(
   auto cli = Client<ServiceT>::make_shared(
     node_handle_,
     client_handle,
-    service_name);
+    service_name,
+    allocator);
 
   auto cli_base_ptr = std::dynamic_pointer_cast<ClientBase>(cli);
   if (group) {
@@ -313,12 +315,13 @@ Node::create_client(
   return cli;
 }
 
-template<typename ServiceT, typename CallbackT>
+template<typename ServiceT, typename FunctorT, typename Alloc>
 typename rclcpp::service::Service<ServiceT>::SharedPtr
 Node::create_service(
   const std::string & service_name,
   CallbackT && callback,
-  rclcpp::callback_group::CallbackGroup::SharedPtr group)
+  rclcpp::callback_group::CallbackGroup::SharedPtr group,
+  std::shared_ptr<Alloc> allocator)
 {
   using rosidl_generator_cpp::get_service_type_support_handle;
   auto service_type_support_handle =
@@ -338,7 +341,7 @@ Node::create_service(
   }
 
   auto serv = service::Service<ServiceT>::make_shared(
-    node_handle_, service_handle, service_name, any_service_callback);
+    node_handle_, service_handle, service_name, any_service_callback, allocator);
   auto serv_base_ptr = std::dynamic_pointer_cast<service::ServiceBase>(serv);
   if (group) {
     if (!group_in_node(group)) {

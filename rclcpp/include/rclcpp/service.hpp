@@ -79,15 +79,12 @@ class Service : public ServiceBase
 public:
   using RequestAllocTraits = allocator::AllocRebind<typename ServiceT::Request, Alloc>;
   using RequestAlloc = typename RequestAllocTraits::allocator_type;
-  using RequestDeleter = allocator::Deleter<Alloc, typename ServiceT::Request>;
 
   using ResponseAllocTraits = allocator::AllocRebind<typename ServiceT::Response, Alloc>;
   using ResponseAlloc = typename ResponseAllocTraits::allocator_type;
-  using ResponseDeleter = allocator::Deleter<Alloc, typename ServiceT::Response>;
 
   using HeaderAllocTraits = allocator::AllocRebind<rmw_request_id_t, Alloc>;
   using HeaderAlloc = typename HeaderAllocTraits::allocator_type;
-  using HeaderDeleter = allocator::Deleter<Alloc, rmw_request_id_t>;
 
   using CallbackType = std::function<
       void(
@@ -105,9 +102,17 @@ public:
     std::shared_ptr<rmw_node_t> node_handle,
     rmw_service_t * service_handle,
     const std::string & service_name,
-    AnyServiceCallback<ServiceT> any_callback)
+    AnyServiceCallback<ServiceT> any_callback,
+    std::shared_ptr<Alloc> allocator = nullptr)
   : ServiceBase(node_handle, service_handle, service_name), any_callback_(any_callback)
-  {}
+  {
+    if (!allocator) {
+      allocator = std::make_shared<Alloc>();
+    }
+    request_allocator_ = std::make_shared<RequestAlloc>(*allocator.get());
+    response_allocator_ = std::make_shared<ResponseAlloc>(*allocator.get());
+    header_allocator_ = std::make_shared<HeaderAlloc>(*allocator.get());
+  }
 
   Service() = delete;
 
