@@ -23,6 +23,7 @@
 #include <tuple>
 #include <utility>
 
+#include "rclcpp/allocator/allocator_common.hpp"
 #include "rclcpp/macros.hpp"
 #include "rclcpp/utilities.hpp"
 #include "rclcpp/visibility_control.hpp"
@@ -70,18 +71,34 @@ private:
   std::string service_name_;
 };
 
-template<typename ServiceT>
+template<typename ServiceT, typename Alloc = std::allocator<void>>
 class Client : public ClientBase
 {
 public:
+  using RequestAllocTraits = allocator::AllocRebind<typename ServiceT::Request, Alloc>;
+  using RequestAlloc = typename RequestAllocTraits::allocator_type;
+  using RequestDeleter = allocator::Deleter<Alloc, typename ServiceT::Request>;
+
+  using ResponseAllocTraits = allocator::AllocRebind<typename ServiceT::Response, Alloc>;
+  using ResponseAlloc = typename ResponseAllocTraits::allocator_type;
+  using ResponseDeleter = allocator::Deleter<Alloc, typename ServiceT::Response>;
+
+  using HeaderAllocTraits = allocator::AllocRebind<rmw_request_id_t, Alloc>;
+  using HeaderAlloc = typename HeaderAllocTraits::allocator_type;
+  using HeaderDeleter = allocator::Deleter<Alloc, rmw_request_id_t>;
+
   using Promise = std::promise<typename ServiceT::Response::SharedPtr>;
   using SharedPromise = std::shared_ptr<Promise>;
   using SharedFuture = std::shared_future<typename ServiceT::Response::SharedPtr>;
 
+  using PromiseAllocTraits = allocator::AllocRebind<Promise, Alloc>;
+  using PromiseAlloc = typename PromiseAllocTraits::allocator_type;
+  using PromiseDeleter = allocator::Deleter<Alloc, Promise>;
+
+
   using CallbackType = std::function<void(SharedFuture)>;
 
   RCLCPP_SMART_PTR_DEFINITIONS(Client);
-
   Client(
     std::shared_ptr<rmw_node_t> node_handle,
     rmw_client_t * client_handle,
@@ -91,14 +108,14 @@ public:
 
   std::shared_ptr<void> create_response()
   {
-    return std::shared_ptr<void>(new typename ServiceT::Response());
+    return std::allocate_shared<typename ServiceT::Response>(*response_allocator_.get());
   }
 
   std::shared_ptr<void> create_request_header()
   {
     // TODO(wjwwood): This should probably use rmw_request_id's allocator.
     //                (since it is a C type)
-    return std::shared_ptr<void>(new rmw_request_id_t);
+    return std::allocate_shared<rmw_request_id_t>(*header_allocator_.get());
   }
 
   void handle_response(std::shared_ptr<void> & request_header, std::shared_ptr<void> & response)
@@ -135,7 +152,7 @@ public:
       // *INDENT-ON*
     }
 
-    SharedPromise call_promise = std::make_shared<Promise>();
+    SharedPromise call_promise = std::allocate_shared<Promise>(*promise_allocator_.get());
     SharedFuture f(call_promise->get_future());
     pending_requests_[sequence_number] =
       std::make_tuple(call_promise, std::forward<CallbackType>(cb), f);
@@ -145,7 +162,18 @@ public:
 private:
   RCLCPP_DISABLE_COPY(Client);
 
-  std::map<int64_t, std::tuple<SharedPromise, CallbackType, SharedFuture>> pending_requests_;
+  using RequestMap = std::map<int64_t, std::tuple<SharedPromise, CallbackType, SharedFuture>,
+    std::less<int64_t>,
+    typename allocator::AllocRebind<
+      typename std::pair<int64_t, std::tuple<SharedPromise, CallbackType, SharedFuture>
+      >, Alloc>::allocator_type >;
+  RequestMap pending_requests_;
+
+  std::shared_ptr<RequestAlloc> request_allocator_;
+  std::shared_ptr<ResponseAlloc> response_allocator_;
+  std::shared_ptr<HeaderAlloc> header_allocator_;
+
+  std::shared_ptr<PromiseAlloc> promise_allocator_;
 };
 
 }  // namespace client

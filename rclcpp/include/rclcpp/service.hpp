@@ -23,6 +23,8 @@
 
 #include "rclcpp/any_service_callback.hpp"
 #include "rclcpp/macros.hpp"
+#include "rclcpp/allocator/allocator_common.hpp"
+#include "rclcpp/any_service_callback.hpp"
 #include "rclcpp/visibility_control.hpp"
 #include "rmw/error_handling.h"
 #include "rmw/rmw.h"
@@ -71,10 +73,22 @@ private:
 
 using any_service_callback::AnyServiceCallback;
 
-template<typename ServiceT>
+template<typename ServiceT, typename Alloc = std::allocator<void>>
 class Service : public ServiceBase
 {
 public:
+  using RequestAllocTraits = allocator::AllocRebind<typename ServiceT::Request, Alloc>;
+  using RequestAlloc = typename RequestAllocTraits::allocator_type;
+  using RequestDeleter = allocator::Deleter<Alloc, typename ServiceT::Request>;
+
+  using ResponseAllocTraits = allocator::AllocRebind<typename ServiceT::Response, Alloc>;
+  using ResponseAlloc = typename ResponseAllocTraits::allocator_type;
+  using ResponseDeleter = allocator::Deleter<Alloc, typename ServiceT::Response>;
+
+  using HeaderAllocTraits = allocator::AllocRebind<rmw_request_id_t, Alloc>;
+  using HeaderAlloc = typename HeaderAllocTraits::allocator_type;
+  using HeaderDeleter = allocator::Deleter<Alloc, rmw_request_id_t>;
+
   using CallbackType = std::function<
       void(
         const std::shared_ptr<typename ServiceT::Request>,
@@ -99,21 +113,21 @@ public:
 
   std::shared_ptr<void> create_request()
   {
-    return std::shared_ptr<void>(new typename ServiceT::Request());
+    return std::allocate_shared<typename ServiceT::Request>(*request_allocator_.get());
   }
 
   std::shared_ptr<void> create_request_header()
   {
     // TODO(wjwwood): This should probably use rmw_request_id's allocator.
     //                (since it is a C type)
-    return std::shared_ptr<void>(new rmw_request_id_t);
+    return std::allocate_shared<rmw_request_id_t>(*header_allocator_.get());
   }
 
   void handle_request(std::shared_ptr<void> request_header, std::shared_ptr<void> request)
   {
     auto typed_request = std::static_pointer_cast<typename ServiceT::Request>(request);
     auto typed_request_header = std::static_pointer_cast<rmw_request_id_t>(request_header);
-    auto response = std::shared_ptr<typename ServiceT::Response>(new typename ServiceT::Response);
+    auto response = std::allocate_shared<typename ServiceT::Response>(*response_allocator_.get());
     any_callback_.dispatch(typed_request_header, typed_request, response);
     send_response(typed_request_header, response);
   }
@@ -135,6 +149,10 @@ private:
   RCLCPP_DISABLE_COPY(Service);
 
   AnyServiceCallback<ServiceT> any_callback_;
+
+  std::shared_ptr<RequestAlloc> request_allocator_;
+  std::shared_ptr<ResponseAlloc> response_allocator_;
+  std::shared_ptr<HeaderAlloc> header_allocator_;
 };
 
 }  // namespace service
