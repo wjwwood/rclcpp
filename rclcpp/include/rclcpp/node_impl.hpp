@@ -271,7 +271,7 @@ Node::create_subscription(
 }
 
 template<typename ServiceT, typename Alloc>
-typename client::Client<ServiceT>::SharedPtr
+typename client::Client<ServiceT, Alloc>::SharedPtr
 Node::create_client(
   const std::string & service_name,
   rclcpp::callback_group::CallbackGroup::SharedPtr group,
@@ -294,7 +294,7 @@ Node::create_client(
   using rclcpp::client::Client;
   using rclcpp::client::ClientBase;
 
-  auto cli = Client<ServiceT>::make_shared(
+  auto cli = Client<ServiceT, Alloc>::make_shared(
     node_handle_,
     client_handle,
     service_name,
@@ -316,7 +316,7 @@ Node::create_client(
 }
 
 template<typename ServiceT, typename FunctorT, typename Alloc>
-typename rclcpp::service::Service<ServiceT>::SharedPtr
+typename rclcpp::service::Service<ServiceT, Alloc>::SharedPtr
 Node::create_service(
   const std::string & service_name,
   CallbackT && callback,
@@ -340,7 +340,7 @@ Node::create_service(
     // *INDENT-ON*
   }
 
-  auto serv = service::Service<ServiceT>::make_shared(
+  auto serv = service::Service<ServiceT, Alloc>::make_shared(
     node_handle_, service_handle, service_name, any_service_callback, allocator);
   auto serv_base_ptr = std::dynamic_pointer_cast<service::ServiceBase>(serv);
   if (group) {

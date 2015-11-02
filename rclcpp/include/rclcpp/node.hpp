@@ -197,7 +197,7 @@ public:
 
   /* Create and return a Client. */
   template<typename ServiceT, typename Alloc = std::allocator<void>>
-  typename rclcpp::client::Client<ServiceT>::SharedPtr
+  typename rclcpp::client::Client<ServiceT, Alloc>::SharedPtr
   create_client(
     const std::string & service_name,
     rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr,
@@ -205,7 +205,7 @@ public:
 
   /* Create and return a Service. */
   template<typename ServiceT, typename FunctorT, typename Alloc = std::allocator<void>>
-  typename rclcpp::service::Service<ServiceT>::SharedPtr
+  typename rclcpp::service::Service<ServiceT, Alloc>::SharedPtr
   create_service(
     const std::string & service_name,
     CallbackT && callback,
