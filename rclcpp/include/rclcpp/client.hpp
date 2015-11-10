@@ -60,7 +60,7 @@ public:
   virtual std::shared_ptr<void> create_response() = 0;
   virtual std::shared_ptr<void> create_request_header() = 0;
   virtual void handle_response(
-    std::shared_ptr<void> & request_header, std::shared_ptr<void> & response) = 0;
+    const std::shared_ptr<void> & request_header, const std::shared_ptr<void> & response) = 0;
 
 private:
   RCLCPP_DISABLE_COPY(ClientBase);
@@ -80,9 +80,12 @@ public:
 
   using ResponseAllocTraits = allocator::AllocRebind<typename ServiceT::Response, Alloc>;
   using ResponseAlloc = typename ResponseAllocTraits::allocator_type;
+  using ResponseDeleter = allocator::Deleter<ResponseAlloc, typename ServiceT::Response>;
+
 
   using HeaderAllocTraits = allocator::AllocRebind<rmw_request_id_t, Alloc>;
   using HeaderAlloc = typename HeaderAllocTraits::allocator_type;
+  using HeaderDeleter = allocator::Deleter<HeaderAlloc, rmw_request_id_t>;
 
   using Promise = std::promise<typename ServiceT::Response::SharedPtr>;
   using SharedPromise = std::shared_ptr<Promise>;
@@ -91,8 +94,12 @@ public:
   using PromiseAllocTraits = allocator::AllocRebind<Promise, Alloc>;
   using PromiseAlloc = typename PromiseAllocTraits::allocator_type;
 
-
   using CallbackType = std::function<void(SharedFuture)>;
+
+  using RequestTuple = std::tuple<SharedPromise, CallbackType, SharedFuture>;
+  using RequestTupleAllocTraits = allocator::AllocRebind<RequestTuple, Alloc>;
+  using RequestTupleAlloc = typename RequestTupleAllocTraits::allocator_type;
+
 
   RCLCPP_SMART_PTR_DEFINITIONS(Client);
   Client(
@@ -105,10 +112,16 @@ public:
     if (!allocator) {
       allocator = std::make_shared<Alloc>();
     }
+    tuple_allocator_ = std::make_shared<RequestTupleAlloc>(*allocator.get());
     request_allocator_ = std::make_shared<RequestAlloc>(*allocator.get());
     response_allocator_ = std::make_shared<ResponseAlloc>(*allocator.get());
     header_allocator_ = std::make_shared<HeaderAlloc>(*allocator.get());
     promise_allocator_ = std::make_shared<PromiseAlloc>(*allocator.get());
+
+    response_deleter_ = std::make_shared<ResponseDeleter>();
+    header_deleter_ = std::make_shared<HeaderDeleter>();
+    rclcpp::allocator::set_allocator_for_deleter(response_deleter_.get(), response_allocator_.get());
+    rclcpp::allocator::set_allocator_for_deleter(header_deleter_.get(), header_allocator_.get());
   }
 
   std::shared_ptr<void> create_response()
@@ -123,20 +136,27 @@ public:
     return std::allocate_shared<rmw_request_id_t>(*header_allocator_.get());
   }
 
-  void handle_response(std::shared_ptr<void> & request_header, std::shared_ptr<void> & response)
+  void handle_response(const std::shared_ptr<void> & request_header, const std::shared_ptr<void> & response)
   {
-    auto typed_request_header = std::static_pointer_cast<rmw_request_id_t>(request_header);
-    auto typed_response = std::static_pointer_cast<typename ServiceT::Response>(response);
+    // TODO: static_pointer_cast allocations
+    //auto typed_request_header = std::static_pointer_cast<rmw_request_id_t>(request_header);
+    auto typed_request_header =
+      rclcpp::allocator::allocator_static_pointer_cast<rmw_request_id_t>(
+        request_header, *header_allocator_.get());
     int64_t sequence_number = typed_request_header->sequence_number;
+    //auto typed_response = std::static_pointer_cast<typename ServiceT::Response>(response);
+    auto typed_response =
+      rclcpp::allocator::allocator_static_pointer_cast<typename ServiceT::Response>(
+        response, *response_allocator_.get());
     // TODO(esteve) this must check if the sequence_number is valid otherwise the
     // call_promise will be null
-    auto tuple = this->pending_requests_[sequence_number];
-    auto call_promise = std::get<0>(tuple);
-    auto callback = std::get<1>(tuple);
-    auto future = std::get<2>(tuple);
-    this->pending_requests_.erase(sequence_number);
+    RequestTuple tuple = std::move(this->pending_requests_.at(sequence_number));
+    auto call_promise = std::move(std::get<0>(tuple));
+    auto callback = std::move(std::get<1>(tuple));
+    auto future = std::move(std::get<2>(tuple));
     call_promise->set_value(typed_response);
     callback(future);
+    this->pending_requests_.erase(sequence_number);
   }
 
   SharedFuture async_send_request(
@@ -157,26 +177,29 @@ public:
       // *INDENT-ON*
     }
 
-    SharedPromise call_promise = std::allocate_shared<Promise>(*promise_allocator_.get());
+    SharedPromise call_promise = std::allocate_shared<Promise>(*promise_allocator_.get(),
+      std::allocator_arg, *promise_allocator_.get());
     SharedFuture f(call_promise->get_future());
-    pending_requests_[sequence_number] =
-      std::make_tuple(call_promise, std::forward<CallbackType>(cb), f);
+
+    auto tup = RequestTuple(call_promise, std::forward<CallbackType>(cb), f);
+    pending_requests_.emplace(sequence_number, std::move(tup));
+
     return f;
   }
 
 private:
   RCLCPP_DISABLE_COPY(Client);
 
-  using RequestMap = std::map<int64_t, std::tuple<SharedPromise, CallbackType, SharedFuture>,
-    std::less<int64_t>,
-    typename allocator::AllocRebind<
-      typename std::pair<int64_t, std::tuple<SharedPromise, CallbackType, SharedFuture>
-      >, Alloc>::allocator_type >;
+  using RequestMap = std::map<int64_t, RequestTuple, std::less<int64_t>,
+    typename allocator::AllocRebind<typename std::pair<int64_t, RequestTuple>, Alloc>::allocator_type>;
   RequestMap pending_requests_;
 
+  std::shared_ptr<RequestTupleAlloc> tuple_allocator_;
   std::shared_ptr<RequestAlloc> request_allocator_;
   std::shared_ptr<ResponseAlloc> response_allocator_;
+  std::shared_ptr<ResponseDeleter> response_deleter_;
   std::shared_ptr<HeaderAlloc> header_allocator_;
+  std::shared_ptr<HeaderDeleter> header_deleter_;
   std::shared_ptr<PromiseAlloc> promise_allocator_;
 };
 

@@ -130,8 +130,14 @@ public:
 
   void handle_request(std::shared_ptr<void> request_header, std::shared_ptr<void> request)
   {
-    auto typed_request = std::static_pointer_cast<typename ServiceT::Request>(request);
-    auto typed_request_header = std::static_pointer_cast<rmw_request_id_t>(request_header);
+    //auto typed_request = std::static_pointer_cast<typename ServiceT::Request>(request);
+    auto typed_request =
+      rclcpp::allocator::allocator_static_pointer_cast<typename ServiceT::Request>(
+        request, *request_allocator_.get());
+    //auto typed_request_header = std::static_pointer_cast<rmw_request_id_t>(request_header);
+    auto typed_request_header =
+      rclcpp::allocator::allocator_static_pointer_cast<rmw_request_id_t>(
+        request_header, *request_allocator_.get());
     auto response = std::allocate_shared<typename ServiceT::Response>(*response_allocator_.get());
     any_callback_.dispatch(typed_request_header, typed_request, response);
     send_response(typed_request_header, response);

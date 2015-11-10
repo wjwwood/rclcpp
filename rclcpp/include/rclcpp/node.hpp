@@ -204,7 +204,7 @@ public:
     std::shared_ptr<Alloc> allocator = nullptr);
 
   /* Create and return a Service. */
-  template<typename ServiceT, typename FunctorT, typename Alloc = std::allocator<void>>
+  template<typename ServiceT, typename CallbackT, typename Alloc = std::allocator<void>>
   typename rclcpp::service::Service<ServiceT, Alloc>::SharedPtr
   create_service(
     const std::string & service_name,

@@ -315,7 +315,7 @@ Node::create_client(
   return cli;
 }
 
-template<typename ServiceT, typename FunctorT, typename Alloc>
+template<typename ServiceT, typename CallbackT, typename Alloc>
 typename rclcpp::service::Service<ServiceT, Alloc>::SharedPtr
 Node::create_service(
   const std::string & service_name,

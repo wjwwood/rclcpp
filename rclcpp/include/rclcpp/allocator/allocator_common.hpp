@@ -27,6 +27,15 @@ namespace allocator
 template<typename T, typename Alloc>
 using AllocRebind = typename std::allocator_traits<Alloc>::template rebind_traits<T>;
 
+
+template<typename T, typename U, typename Alloc>
+static std::shared_ptr<T> allocator_static_pointer_cast(const std::shared_ptr<U> & p, Alloc alloc)
+{
+  T * q = static_cast<T*>(p.get());
+  //return std::shared_ptr<T>(q, d, alloc);
+  return std::allocate_shared<T>(alloc, *q);
+}
+
 }  // namespace allocator
 }  // namespace rclcpp
 
