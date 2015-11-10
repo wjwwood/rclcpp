@@ -148,21 +148,23 @@ public:
     auto typed_response =
       rclcpp::allocator::allocator_static_pointer_cast<typename ServiceT::Response>(
         response, *response_allocator_.get());
-    // TODO(esteve) this must check if the sequence_number is valid otherwise the
-    // call_promise will be null
+
+    // std::map::at will throw an exception if sequence_number is invalid
     RequestTuple tuple = std::move(this->pending_requests_.at(sequence_number));
     auto call_promise = std::move(std::get<0>(tuple));
-    auto callback = std::move(std::get<1>(tuple));
-    auto future = std::move(std::get<2>(tuple));
     call_promise->set_value(typed_response);
-    callback(future);
+    auto callback = std::move(std::get<1>(tuple));
+    if (callback) {
+      auto future = std::move(std::get<2>(tuple));
+      callback(future);
+    }
     this->pending_requests_.erase(sequence_number);
   }
 
   SharedFuture async_send_request(
     typename ServiceT::Request::SharedPtr request)
   {
-    return async_send_request(request, [](SharedFuture) {});
+    return async_send_request(request, nullptr);
   }
 
   SharedFuture async_send_request(
@@ -181,7 +183,7 @@ public:
       std::allocator_arg, *promise_allocator_.get());
     SharedFuture f(call_promise->get_future());
 
-    auto tup = RequestTuple(call_promise, std::forward<CallbackType>(cb), f);
+    auto tup = RequestTuple(std::move(call_promise), std::forward<CallbackType>(cb), f);
     pending_requests_.emplace(sequence_number, std::move(tup));
 
     return f;
