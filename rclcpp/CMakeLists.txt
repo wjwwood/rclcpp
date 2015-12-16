@@ -111,6 +111,7 @@ if(AMENT_ENABLE_TESTING)
     )
     target_link_libraries(test_rate
       ${PROJECT_NAME}${target_suffix}
+      ${rmw_implementation_LIBRARIES}
     )
   endif()
 endif()
