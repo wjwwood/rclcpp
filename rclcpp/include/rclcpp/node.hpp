@@ -131,7 +131,7 @@ public:
   typename rclcpp::subscription::Subscription<MessageT, Alloc>::SharedPtr
   create_subscription(
     const std::string & topic_name,
-    CallbackT && callback,
+    CallbackT callback,
     const rmw_qos_profile_t & qos_profile = rmw_qos_profile_default,
     rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr,
     bool ignore_local_publications = false,
@@ -158,7 +158,7 @@ public:
   create_subscription(
     const std::string & topic_name,
     size_t qos_history_depth,
-    CallbackT && callback,
+    CallbackT callback,
     rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr,
     bool ignore_local_publications = false,
     typename rclcpp::message_memory_strategy::MessageMemoryStrategy<MessageT, Alloc>::SharedPtr
@@ -208,7 +208,7 @@ public:
   typename rclcpp::service::Service<ServiceT>::SharedPtr
   create_service(
     const std::string & service_name,
-    CallbackT && callback,
+    CallbackT callback,
     const rmw_qos_profile_t & qos_profile = rmw_qos_profile_services_default,
     rclcpp::callback_group::CallbackGroup::SharedPtr group = nullptr);
 

@@ -141,7 +141,7 @@ public:
       >::value
     >::type * = nullptr
   >
-  SharedFuture async_send_request(SharedRequest request, CallbackT && cb)
+  SharedFuture async_send_request(SharedRequest request, CallbackT cb)
   {
     int64_t sequence_number;
     if (RMW_RET_OK != rmw_send_request(get_client_handle(), request.get(), &sequence_number)) {
@@ -154,7 +154,7 @@ public:
     SharedPromise call_promise = std::make_shared<Promise>();
     SharedFuture f(call_promise->get_future());
     pending_requests_[sequence_number] =
-      std::make_tuple(call_promise, std::forward<CallbackType>(cb), f);
+      std::make_tuple(call_promise, cb, f);
     return f;
   }
 
@@ -167,7 +167,7 @@ public:
       >::value
     >::type * = nullptr
   >
-  SharedFutureWithRequest async_send_request(SharedRequest request, CallbackT && cb)
+  SharedFutureWithRequest async_send_request(SharedRequest request, CallbackT cb)
   {
     SharedPromiseWithRequest promise = std::make_shared<PromiseWithRequest>();
     SharedFutureWithRequest future_with_request(promise->get_future());

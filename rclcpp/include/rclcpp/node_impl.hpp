@@ -141,7 +141,7 @@ template<typename MessageT, typename CallbackT, typename Alloc>
 typename rclcpp::subscription::Subscription<MessageT, Alloc>::SharedPtr
 Node::create_subscription(
   const std::string & topic_name,
-  CallbackT && callback,
+  CallbackT callback,
   const rmw_qos_profile_t & qos_profile,
   rclcpp::callback_group::CallbackGroup::SharedPtr group,
   bool ignore_local_publications,
@@ -155,7 +155,7 @@ Node::create_subscription(
 
   rclcpp::subscription::AnySubscriptionCallback<MessageT,
   Alloc> any_subscription_callback(allocator);
-  any_subscription_callback.set(std::forward<CallbackT>(callback));
+  any_subscription_callback.set(callback);
 
   using rosidl_generator_cpp::get_message_type_support_handle;
 
@@ -251,7 +251,7 @@ typename rclcpp::subscription::Subscription<MessageT, Alloc>::SharedPtr
 Node::create_subscription(
   const std::string & topic_name,
   size_t qos_history_depth,
-  CallbackT && callback,
+  CallbackT callback,
   rclcpp::callback_group::CallbackGroup::SharedPtr group,
   bool ignore_local_publications,
   typename rclcpp::message_memory_strategy::MessageMemoryStrategy<MessageT, Alloc>::SharedPtr
@@ -262,7 +262,7 @@ Node::create_subscription(
   qos.depth = qos_history_depth;
   return this->create_subscription<MessageT, CallbackT, Alloc>(
     topic_name,
-    std::forward<CallbackT>(callback),
+    callback,
     qos,
     group,
     ignore_local_publications,
@@ -340,7 +340,7 @@ template<typename ServiceT, typename CallbackT>
 typename rclcpp::service::Service<ServiceT>::SharedPtr
 Node::create_service(
   const std::string & service_name,
-  CallbackT && callback,
+  CallbackT callback,
   const rmw_qos_profile_t & qos_profile,
   rclcpp::callback_group::CallbackGroup::SharedPtr group)
 {
@@ -349,7 +349,7 @@ Node::create_service(
     get_service_type_support_handle<ServiceT>();
 
   rclcpp::service::AnyServiceCallback<ServiceT> any_service_callback;
-  any_service_callback.set(std::forward<CallbackT>(callback));
+  any_service_callback.set(callback);
 
   rmw_service_t * service_handle = rmw_create_service(
     node_handle_.get(), service_type_support_handle, service_name.c_str(), &qos_profile);
