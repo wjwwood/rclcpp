@@ -36,8 +36,11 @@
 /// Represent the status of the global interrupt signal.
 static volatile sig_atomic_t g_signal_status = 0;
 /// Guard condition for interrupting the rmw implementation when the global interrupt signal fired.
-static rcl_guard_condition_t g_sigint_guard_cond_handle =
-  rcl_get_zero_initialized_guard_condition();
+// TODO we need a better init/fini scheme for this guard condition
+//static rcl_guard_condition_t * g_sigint_guard_cond_handle =
+//  rcl_get_zero_initialized_guard_condition();
+static rcl_guard_condition_t * g_sigint_guard_cond_handle = nullptr;
+
 /// Condition variable for timed sleep (see sleep_for).
 static std::condition_variable g_interrupt_condition_variable;
 static std::atomic<bool> g_is_interrupted(false);
@@ -81,7 +84,7 @@ signal_handler(int signal_value)
   }
 #endif
   g_signal_status = signal_value;
-  rcl_ret_t status = rcl_trigger_guard_condition(&g_sigint_guard_cond_handle);
+  rcl_ret_t status = rcl_trigger_guard_condition(g_sigint_guard_cond_handle);
   if (status != RCL_RET_OK) {
     fprintf(stderr,
       "[rclcpp::error] failed to trigger guard condition: %s\n", rcl_get_error_string_safe());
@@ -140,7 +143,8 @@ rclcpp::utilities::init(int argc, char * argv[])
     // *INDENT-ON*
   }
   rcl_guard_condition_options_t options = rcl_guard_condition_get_default_options();
-  if (rcl_guard_condition_init(&g_sigint_guard_cond_handle, options) != RCL_RET_OK) {
+  g_sigint_guard_cond_handle = new rcl_guard_condition_t(rcl_get_zero_initialized_guard_condition());
+  if (rcl_guard_condition_init(g_sigint_guard_cond_handle, options) != RCL_RET_OK) {
     throw std::runtime_error(std::string(
               "Couldn't initialize guard condition: ") + rcl_get_error_string_safe());
   }
@@ -149,25 +153,32 @@ rclcpp::utilities::init(int argc, char * argv[])
 bool
 rclcpp::utilities::ok()
 {
-  return ::g_signal_status == 0;
+  return ::g_signal_status == 0 && rcl_ok();
 }
 
 void
 rclcpp::utilities::shutdown()
 {
   g_signal_status = SIGINT;
-  if (rcl_trigger_guard_condition(&g_sigint_guard_cond_handle) != RCL_RET_OK) {
+  if (rcl_trigger_guard_condition(g_sigint_guard_cond_handle) != RCL_RET_OK) {
     fprintf(stderr,
       "[rclcpp::error] failed to trigger guard condition: %s\n", rmw_get_error_string_safe());
   }
   g_is_interrupted.store(true);
   g_interrupt_condition_variable.notify_all();
+
+  if (rcl_guard_condition_fini(g_sigint_guard_cond_handle) != RCL_RET_OK) {
+    fprintf(stderr,
+      "[rclcpp::error] failed to fini guard condition: %s\n", rmw_get_error_string_safe());
+  }
+  delete g_sigint_guard_cond_handle;
+  rcl_shutdown();
 }
 
 rcl_guard_condition_t *
 rclcpp::utilities::get_global_sigint_guard_condition()
 {
-  return &::g_sigint_guard_cond_handle;
+  return ::g_sigint_guard_cond_handle;
 }
 
 bool

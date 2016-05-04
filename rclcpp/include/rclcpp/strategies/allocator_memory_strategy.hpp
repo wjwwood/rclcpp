@@ -221,6 +221,7 @@ public:
         return false;
       }
     }
+    fprintf(stderr, "added %d guard conditions\n", guard_conditions_.size());
     return true;
   }
 
