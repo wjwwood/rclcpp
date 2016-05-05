@@ -30,18 +30,18 @@ namespace rclcpp
 namespace any_service_callback
 {
 
-template<typename ServiceT>
+template<typename RequestT, typename ResponseT>
 class AnyServiceCallback
 {
 private:
   using SharedPtrCallback = std::function<void(
-        const std::shared_ptr<typename ServiceT::Request>,
-        std::shared_ptr<typename ServiceT::Response>
+        const std::shared_ptr<RequestT>,
+        std::shared_ptr<ResponseT>
       )>;
   using SharedPtrWithRequestHeaderCallback = std::function<void(
         const std::shared_ptr<rmw_request_id_t>,
-        const std::shared_ptr<typename ServiceT::Request>,
-        std::shared_ptr<typename ServiceT::Response>
+        const std::shared_ptr<RequestT>,
+        std::shared_ptr<ResponseT>
       )>;
 
   SharedPtrCallback shared_ptr_callback_;
@@ -84,8 +84,8 @@ public:
 
   void dispatch(
     std::shared_ptr<rmw_request_id_t> request_header,
-    std::shared_ptr<typename ServiceT::Request> request,
-    std::shared_ptr<typename ServiceT::Response> response)
+    std::shared_ptr<RequestT> request,
+    std::shared_ptr<ResponseT> response)
   {
     if (shared_ptr_callback_ != nullptr) {
       (void)request_header;

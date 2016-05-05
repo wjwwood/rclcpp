@@ -334,7 +334,7 @@ Node::create_service(
   const rmw_qos_profile_t & qos_profile,
   rclcpp::callback_group::CallbackGroup::SharedPtr group)
 {
-  rclcpp::service::AnyServiceCallback<ServiceT> any_service_callback;
+  rclcpp::service::AnyServiceCallback<typename ServiceT::Request, typename ServiceT::Response> any_service_callback;
   any_service_callback.set(std::forward<CallbackT>(callback));
 
   rcl_service_options_t service_options = rcl_service_get_default_options();

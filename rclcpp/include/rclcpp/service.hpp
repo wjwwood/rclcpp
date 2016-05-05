@@ -76,8 +76,8 @@ using any_service_callback::AnyServiceCallback;
 
 
 // TODO Store function etc.
-template<typename RequestT, ResponseT>
-class ServicePattern
+template<typename RequestT, typename ResponseT>
+class ServicePattern : public ServiceBase
 {
 public:
   using CallbackType = std::function<
@@ -92,28 +92,20 @@ public:
         std::shared_ptr<ResponseT>)>;
   // RCLCPP_SMART_PTR_DEFINITIONS(Service);
 
+  using SendResponseFunctionT = std::function<void(std::shared_ptr<rmw_request_id_t>, std::shared_ptr<ResponseT>)>;
+
   // TODO
   ServicePattern(
-    AnyServiceCallback<ServiceT> any_callback)
+    AnyServiceCallback<RequestT, ResponseT> any_callback)
   : any_callback_(any_callback)
   {
   }
 
-  Service() = delete;
-
-  virtual ~Service()
-  {
-    if (rcl_service_fini(&service_handle_, node_handle_.get()) != RCL_RET_OK) {
-      std::stringstream ss;
-      ss << "Error in destruction of rcl service_handle_ handle: " <<
-        rcl_get_error_string_safe() << '\n';
-      (std::cerr << ss.str()).flush();
-    }
-  }
+  ServicePattern() = delete;
 
   std::shared_ptr<void> create_request()
   {
-    return std::shared_ptr<void>(new typename ServiceT::Request());
+    return std::shared_ptr<void>(new RequestT());
   }
 
   std::shared_ptr<rmw_request_id_t> create_request_header()
@@ -126,31 +118,33 @@ public:
   void handle_request(std::shared_ptr<rmw_request_id_t> request_header,
     std::shared_ptr<void> request)
   {
-    auto typed_request = std::static_pointer_cast<typename ServiceT::Request>(request);
-    auto response = std::shared_ptr<typename ServiceT::Response>(new typename ServiceT::Response);
+    auto typed_request = std::static_pointer_cast<RequestT>(request);
+    auto response = std::shared_ptr<ResponseT>(new ResponseT);
     any_callback_.dispatch(request_header, typed_request, response);
-    send_response(request_header, response);
+    send_response_function(request_header, response);
   }
 
+protected:
+  SendResponseFunctionT send_response_function_;
 
 private:
   RCLCPP_DISABLE_COPY(ServicePattern);
 
-  AnyServiceCallback<ServiceT> any_callback_;
+  AnyServiceCallback<RequestT, ResponseT> any_callback_;
 };
 
 template<typename ServiceT>
-class Service : public ServicePattern<typename ServiceT::Request, typename ServiceT::Response>,
-  public ServiceBase
+class Service : public ServicePattern<typename ServiceT::Request, typename ServiceT::Response:
 {
+  using ServicePatternT = ServicePattern<typename ServiceT::Request::SharedPtr, typename ServiceT::Response::SharedPtr>;
 public:
   // TODO Also call ServicePattern constructor.
   Service(
     std::shared_ptr<rcl_node_t> node_handle,
     const std::string & service_name,
-    AnyServiceCallback<ServiceT> any_callback,
+    AnyServiceCallback<typename ServiceT::Request, typename ServiceT::Response> any_callback,
     rcl_service_options_t & service_options)
-  : ServiceBase(node_handle, service_name), ServicePattern(any_callback)
+  : ServiceBase(node_handle, service_name), ServicePatternT(any_callback)
   {
     using rosidl_generator_cpp::get_service_type_support_handle;
     auto service_type_support_handle = get_service_type_support_handle<ServiceT>();
@@ -162,6 +156,16 @@ public:
       throw std::runtime_error(
               std::string("could not create service: ") +
               rcl_get_error_string_safe());
+    }
+  }
+
+  virtual ~Service()
+  {
+    if (rcl_service_fini(&service_handle_, node_handle_.get()) != RCL_RET_OK) {
+      std::stringstream ss;
+      ss << "Error in destruction of rcl service_handle_ handle: " <<
+        rcl_get_error_string_safe() << '\n';
+      (std::cerr << ss.str()).flush();
     }
   }
 
