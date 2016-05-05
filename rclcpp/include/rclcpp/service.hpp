@@ -74,40 +74,29 @@ protected:
 
 using any_service_callback::AnyServiceCallback;
 
-template<typename ServiceT>
-class Service : public ServiceBase
+
+// TODO Store function etc.
+template<typename RequestT, ResponseT>
+class ServicePattern
 {
 public:
   using CallbackType = std::function<
       void(
-        const std::shared_ptr<typename ServiceT::Request>,
-        std::shared_ptr<typename ServiceT::Response>)>;
+        const std::shared_ptr<RequestT>,
+        std::shared_ptr<ResponseT>)>;
 
   using CallbackWithHeaderType = std::function<
       void(
         const std::shared_ptr<rmw_request_id_t>,
-        const std::shared_ptr<typename ServiceT::Request>,
-        std::shared_ptr<typename ServiceT::Response>)>;
-  RCLCPP_SMART_PTR_DEFINITIONS(Service);
+        const std::shared_ptr<RequestT>,
+        std::shared_ptr<ResponseT>)>;
+  // RCLCPP_SMART_PTR_DEFINITIONS(Service);
 
-  Service(
-    std::shared_ptr<rcl_node_t> node_handle,
-    const std::string & service_name,
-    AnyServiceCallback<ServiceT> any_callback,
-    rcl_service_options_t & service_options)
-  : ServiceBase(node_handle, service_name), any_callback_(any_callback)
+  // TODO
+  ServicePattern(
+    AnyServiceCallback<ServiceT> any_callback)
+  : any_callback_(any_callback)
   {
-    using rosidl_generator_cpp::get_service_type_support_handle;
-    auto service_type_support_handle = get_service_type_support_handle<ServiceT>();
-
-    if (rcl_service_init(
-        &service_handle_, node_handle.get(), service_type_support_handle, service_name.c_str(),
-        &service_options) != RCL_RET_OK)
-    {
-      throw std::runtime_error(
-              std::string("could not create service: ") +
-              rcl_get_error_string_safe());
-    }
   }
 
   Service() = delete;
@@ -143,6 +132,40 @@ public:
     send_response(request_header, response);
   }
 
+
+private:
+  RCLCPP_DISABLE_COPY(ServicePattern);
+
+  AnyServiceCallback<ServiceT> any_callback_;
+};
+
+template<typename ServiceT>
+class Service : public ServicePattern<typename ServiceT::Request, typename ServiceT::Response>,
+  public ServiceBase
+{
+public:
+  // TODO Also call ServicePattern constructor.
+  Service(
+    std::shared_ptr<rcl_node_t> node_handle,
+    const std::string & service_name,
+    AnyServiceCallback<ServiceT> any_callback,
+    rcl_service_options_t & service_options)
+  : ServiceBase(node_handle, service_name), ServicePattern(any_callback)
+  {
+    using rosidl_generator_cpp::get_service_type_support_handle;
+    auto service_type_support_handle = get_service_type_support_handle<ServiceT>();
+
+    if (rcl_service_init(
+        &service_handle_, node_handle.get(), service_type_support_handle, service_name.c_str(),
+        &service_options) != RCL_RET_OK)
+    {
+      throw std::runtime_error(
+              std::string("could not create service: ") +
+              rcl_get_error_string_safe());
+    }
+  }
+
+  RCLCPP_SMART_PTR_DEFINITIONS(Service);
   void send_response(
     std::shared_ptr<rmw_request_id_t> req_id,
     std::shared_ptr<typename ServiceT::Response> response)
@@ -157,10 +180,6 @@ public:
     }
   }
 
-private:
-  RCLCPP_DISABLE_COPY(Service);
-
-  AnyServiceCallback<ServiceT> any_callback_;
 };
 
 }  // namespace service
